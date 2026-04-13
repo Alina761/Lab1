@@ -1,5 +1,5 @@
 ﻿#define GLEW_DLL
-// #define GLFW_DLL  // закомментировано для статической версии
+// #define GLFW_DLL
 
 #include <windows.h>
 #include <GL/glew.h>
@@ -10,9 +10,13 @@
 #include <string>
 #include <vector>
 
-// БИБЛИОТЕКА ДЛЯ РАБОТЫ С ШЕЙДЕРАМИ (Задание 2)
+// Подключаем GLM для матриц и векторов
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
-// Чтение файла шейдера
+// БИБЛИОТЕКА ДЛЯ РАБОТЫ С ШЕЙДЕРАМИ
+
 std::string readShaderFile(const char* filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -23,7 +27,6 @@ std::string readShaderFile(const char* filename) {
     return content;
 }
 
-// Компиляция шейдера из файла
 unsigned int compileShaderFromFile(unsigned int type, const char* filename) {
     std::string source = readShaderFile(filename);
     if (source.empty()) return 0;
@@ -33,7 +36,6 @@ unsigned int compileShaderFromFile(unsigned int type, const char* filename) {
     glShaderSource(shader, 1, &sourceCStr, NULL);
     glCompileShader(shader);
 
-    // Проверка ошибок компиляции
     int success;
     char infoLog[1024];
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
@@ -46,28 +48,23 @@ unsigned int compileShaderFromFile(unsigned int type, const char* filename) {
     return shader;
 }
 
-// Создание шейдерной программы из файлов
 unsigned int createShaderProgramFromFiles(const char* vertexPath, const char* fragmentPath) {
     unsigned int vertexShader = compileShaderFromFile(GL_VERTEX_SHADER, vertexPath);
     unsigned int fragmentShader = compileShaderFromFile(GL_FRAGMENT_SHADER, fragmentPath);
 
-    if (vertexShader == 0 || fragmentShader == 0) {
-        fprintf(stderr, "Не удалось скомпилировать один из шейдеров\n");
-        return 0;
-    }
+    if (vertexShader == 0 || fragmentShader == 0) return 0;
 
     unsigned int shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
 
-    // Проверка ошибок линковки
     int success;
     char infoLog[1024];
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(shaderProgram, 1024, NULL, infoLog);
-        fprintf(stderr, "ОШИБКА линковки шейдерной программы:\n%s\n", infoLog);
+        fprintf(stderr, "ОШИБКА линковки:\n%s\n", infoLog);
         return 0;
     }
 
@@ -76,40 +73,77 @@ unsigned int createShaderProgramFromFiles(const char* vertexPath, const char* fr
     return shaderProgram;
 }
 
-// УТИЛИТЫ ДЛЯ UNIFORM (одна строка)
+// ПЕРЕМЕННЫЕ КАМЕРЫ (глобальные для callback)
 
-// Установка uniform vec4 (цвет)
-void setUniformVec4(unsigned int program, const char* name, float x, float y, float z, float w) {
-    glUseProgram(program);
-    int location = glGetUniformLocation(program, name);
-    glUniform4f(location, x, y, z, w);
-}
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-// Установка uniform float
-void setUniformFloat(unsigned int program, const char* name, float value) {
-    glUseProgram(program);
-    int location = glGetUniformLocation(program, name);
-    glUniform1f(location, value);
+float yaw = -90.0f;   // начальный угол рыскания
+float pitch = 0.0f;     // начальный угол тангажа
+float lastX = 400.0f;   // центр окна (ширина/2)
+float lastY = 300.0f;   // центр окна (высота/2)
+bool firstMouse = true;
+
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+
+// CALLBACK ДЛЯ МЫШИ
+
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
+    if (firstMouse) {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; 
+    lastX = xpos;
+    lastY = ypos;
+
+    float sensitivity = 0.1f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    // Ограничение pitch (чтобы не переворачивать камеру)
+    if (pitch > 89.0f)  pitch = 89.0f;
+    if (pitch < -89.0f) pitch = -89.0f;
+
+    // Вычисляем новый вектор направления
+    glm::vec3 direction;
+    direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    direction.y = sin(glm::radians(pitch));
+    direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(direction);
 }
 
 // ГЛАВНАЯ ФУНКЦИЯ
 
 int main() {
-    // 1. Инициализация GLFW
+    SetConsoleOutputCP(1251);
+    SetConsoleCP(1251);
+    // Инициализация GLFW
     if (!glfwInit()) {
         fprintf(stderr, "Ошибка инициализации GLFW\n");
         return -1;
     }
 
-    // 2. Настройка версии OpenGL 4.6 Core Profile
+    // Настройка OpenGL 4.6
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // 3. Создание окна
+    // Создание окна
     GLFWwindow* window = glfwCreateWindow(800, 600,
-        "Pototskaya Alina - ASUb-24-1 - Variant 19", NULL, NULL);
+        "Lab4 Pototskaya Alina ASUb-24-1", NULL, NULL);
     if (!window) {
         fprintf(stderr, "Ошибка создания окна\n");
         glfwTerminate();
@@ -119,59 +153,49 @@ int main() {
     glfwMakeContextCurrent(window);
     glewExperimental = GL_TRUE;
 
-    // 4. Инициализация GLEW
+    // Инициализация GLEW
     GLenum ret = glewInit();
     if (ret != GLEW_OK) {
         fprintf(stderr, "Ошибка GLEW: %s\n", glewGetErrorString(ret));
         return -1;
     }
 
-    // Вывод информации о системе
-    SetConsoleOutputCP(1251);
-    printf("Вариант 19: Треугольник, цвет меняется от времени\n");
-    printf("Шейдеры загружаются из файлов: vertex.glsl, fragment.glsl\n");
+    // Скрываем курсор и захватываем его в окне
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, mouse_callback);
 
-    // 5. ДАННЫЕ ДЛЯ ФИГУРЫ (ТРЕУГОЛЬНИК)
+    printf("Управление: WASD - движение, Мышь - поворот камеры\n");
 
-    // Вершины треугольника (координаты x, y)
+    // ДАННЫЕ ТРЕУГОЛЬНИКА
     float vertices[] = {
-         0.0f,  0.5f,   // верхняя вершина (0)
+         0.0f,  0.5f,   // верхняя (0)
         -0.5f, -0.3f,   // левая нижняя (1)
          0.5f, -0.3f    // правая нижняя (2)
     };
 
-    // Индексы вершин (порядок отрисовки)
-    unsigned int indices[] = {
-        0, 1, 2   // один треугольник из трёх вершин
-    };
+    unsigned int indices[] = { 0, 1, 2 };
 
-    // 6. СОЗДАНИЕ VAO, VBO, EBO
+    // VAO, VBO, EBO
     unsigned int VAO, VBO, EBO;
-
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
 
-    // Привязываем VAO (все настройки ниже будут сохранены в нём)
     glBindVertexArray(VAO);
 
-    // Настройка VBO (буфер вершин)
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    // Настройка EBO (буфер индексов)
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    // Указываем, как интерпретировать данные вершин
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    // Отвязываем VBO
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    // 7. СОЗДАНИЕ ШЕЙДЕРНОЙ ПРОГРАММЫ ИЗ ФАЙЛОВ (Задание 2)
+    // ШЕЙДЕРНАЯ ПРОГРАММА
     unsigned int shaderProgram = createShaderProgramFromFiles("vertex.glsl", "fragment.glsl");
     if (shaderProgram == 0) {
         fprintf(stderr, "Не удалось создать шейдерную программу\n");
@@ -179,33 +203,71 @@ int main() {
         return -1;
     }
 
-    // 8. ОСНОВНОЙ ЦИКЛ РЕНДЕРИНГА
+    // Включаем глубину
+    glEnable(GL_DEPTH_TEST);
+
+    // ОСНОВНОЙ ЦИКЛ
     while (!glfwWindowShouldClose(window)) {
-        // Очистка экрана (белый фон)
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        // Выход по Esc
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+            glfwSetWindowShouldClose(window, true);
+        // Время для анимации цвета
+        float currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
 
-        // ЗАДАНИЕ 1: ИЗМЕНЕНИЕ ЦВЕТА ОТ ВРЕМЕНИ
-        double currentTime = glfwGetTime();
+        // Цвет от времени (как в Lab2)
+        float red = (sin(currentFrame) + 1.0f) / 2.0f;
+        float green = (sin(currentFrame + 2.0f) + 1.0f) / 2.0f;
+        float blue = (sin(currentFrame + 4.0f) + 1.0f) / 2.0f;
 
-        // Используем синусоидальный закон для плавного изменения цветов
-        float red = (sin(currentTime) + 1.0f) / 2.0f;
-        float green = (sin(currentTime + 2.0f) + 1.0f) / 2.0f;
-        float blue = (sin(currentTime + 4.0f) + 1.0f) / 2.0f;
+        // УПРАВЛЕНИЕ КАМЕРОЙ
+        float cameraSpeed = 2.5f * deltaTime;
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            cameraPos += cameraSpeed * cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            cameraPos -= cameraSpeed * cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 
-        // Передаём цвет в шейдер (ОДНА СТРОКА!)
-        setUniformVec4(shaderProgram, "ourColor", red, green, blue, 1.0f);
+        // МАТРИЦЫ
+        // Матрица проекции 
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
 
-        // Рисуем треугольник
+        // Матрица вида (камера)
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+        // Матрица модели
+        glm::mat4 model = glm::mat4(1.0f);
+
+        // ОТРИСОВКА
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);  // тёмно-серый фон
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glUseProgram(shaderProgram);
+
+        // Передаём матрицы в шейдер
+        int projLoc = glGetUniformLocation(shaderProgram, "projection");
+        int viewLoc = glGetUniformLocation(shaderProgram, "view");
+        int modelLoc = glGetUniformLocation(shaderProgram, "model");
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+        // Передаём цвет
+        int colorLoc = glGetUniformLocation(shaderProgram, "ourColor");
+        glUniform4f(colorLoc, red, green, blue, 1.0f);
+
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
 
-        // Смена буферов и обработка событий
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // 9. ОЧИСТКА РЕСУРСОВ
+    // Очистка
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
