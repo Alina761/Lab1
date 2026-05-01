@@ -15,7 +15,7 @@
 
 #include "Model.h"
 
-// =================== КАМЕРА ===================
+//КАМЕРА
 glm::vec3 cameraPos = glm::vec3(2.0f, 2.0f, 5.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -43,7 +43,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     cameraFront = glm::normalize(dir);
 }
 
-// =================== ШЕЙДЕРЫ ===================
+//ШЕЙДЕРЫ
 std::string readFile(const char* name) {
     std::ifstream f(name);
     return f.is_open() ? std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>()) : "";
@@ -77,14 +77,14 @@ unsigned int createShaderProgram(const char* vpath, const char* fpath) {
     return prog;
 }
 
-// =================== ГЛАВНАЯ ===================
+//ГЛАВНАЯ
 int main() {
     SetConsoleOutputCP(1251);
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Lab6 - Lighting - Variant 19", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "Lab6 Variant 19", NULL, NULL);
     glfwMakeContextCurrent(window);
     glewInit();
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
