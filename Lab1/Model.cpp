@@ -5,9 +5,18 @@ Model::Model(const char* path) {
     loadModel(path);
 }
 
-void Model::Draw() {
+void Model::Draw(unsigned int shaderProgram) {
     for (unsigned int i = 0; i < meshes.size(); i++) {
-        meshes[i].Draw();
+        meshes[i].Draw(shaderProgram, glm::mat4(1.0f));
+    }
+}
+
+void Model::DrawPart(unsigned int index, unsigned int shaderProgram, const glm::mat4& modelMatrix) {
+    if (index < meshes.size()) {
+        meshes[index].Draw(shaderProgram, modelMatrix);
+    }
+    else {
+        printf("Ошибка: индекс меша %d вне диапазона (всего мешей: %d)\n", index, (int)meshes.size());
     }
 }
 
@@ -21,7 +30,7 @@ void Model::loadModel(const std::string& path) {
     }
     directory = path.substr(0, path.find_last_of('/'));
     processNode(scene->mRootNode, scene);
-    printf("Модель загружена: %s, мешей: %d\n", path.c_str(), (int)meshes.size());
+    printf("Модель загружена: %s, количество мешей: %d\n", path.c_str(), (int)meshes.size());
 }
 
 void Model::processNode(aiNode* node, const aiScene* scene) {

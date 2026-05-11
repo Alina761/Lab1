@@ -16,7 +16,7 @@
 #include "Model.h"
 
 //КАМЕРА
-glm::vec3 cameraPos = glm::vec3(2.0f, 2.0f, 5.0f);
+glm::vec3 cameraPos = glm::vec3(3.0f, 3.0f, 5.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -77,14 +77,39 @@ unsigned int createShaderProgram(const char* vpath, const char* fpath) {
     return prog;
 }
 
-//ГЛАВНАЯ
+//МАТРИЦЫ И КООРДИНАТЫ
+glm::mat4 partMatrix[3];
+glm::vec3 partCenter[3] = {
+    glm::vec3(0.000000f, -0.486263f,  1.326860f), // куб
+    glm::vec3(-0.034030f, -0.568563f,  1.878100f), // куб001
+    glm::vec3(0.000000f,  0.536150f,  2.096110f)  // цилиндр
+};
+
+// Параметры для каждой части (пример)
+float translatePart[3] = { 0.0f, 0.0f, 0.0f };
+float rotatePart[3] = { 0.0f, 0.0f, 0.0f };
+float scalePart[3] = { 1.0f, 1.0f, 1.0f };
+
+glm::mat4 buildModelMatrix(int i, float trans, float rot, float scaleVal) {
+    glm::mat4 model = glm::mat4(1.0f);
+    // Перенос в центр
+    model = glm::translate(model, partCenter[i]);
+    // Преобразования
+    model = glm::translate(model, glm::vec3(0.0f, 0.0f, trans));
+    model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(scaleVal));
+    // Перенос обратно
+    model = glm::translate(model, -partCenter[i]);
+    return model;
+}
+
 int main() {
     SetConsoleOutputCP(1251);
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Lab6 Variant 19", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "Lab7 Variant 19", NULL, NULL);
     glfwMakeContextCurrent(window);
     glewInit();
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -96,7 +121,8 @@ int main() {
 
     Model ourModel("models/my_model.obj");
 
-    glm::vec3 lightPos = glm::vec3(1.2f, 1.0f, 2.0f);
+    // Освещение
+    glm::vec3 lightPos = glm::vec3(1.2f, 3.0f, 2.0f);
     glm::vec3 lightAmbient = glm::vec3(0.2f, 0.2f, 0.2f);
     glm::vec3 lightDiffuse = glm::vec3(0.8f, 0.8f, 0.8f);
     glm::vec3 lightSpecular = glm::vec3(1.0f, 1.0f, 1.0f);
@@ -110,17 +136,31 @@ int main() {
         float now = glfwGetTime();
         deltaTime = now - lastFrame;
         lastFrame = now;
-
         float speed = 2.5f * deltaTime;
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraPos += speed * cameraFront;
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraPos -= speed * cameraFront;
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * speed;
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * speed;
+        float angleSpeed = 50.0f * deltaTime;
+
+        // Управление камерой (стрелки)
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) cameraPos += speed * cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) cameraPos -= speed * cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * speed;
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * speed;
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
+
+        // Управление частями
+        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) rotatePart[0] += angleSpeed;
+        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) rotatePart[0] -= angleSpeed;
+        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) translatePart[1] += speed;
+        if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS) translatePart[1] -= speed;
+        if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS) scalePart[2] += speed * 0.5f;
+        if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS) scalePart[2] -= speed * 0.5f;
+
+        // Сборка матриц
+        partMatrix[0] = buildModelMatrix(0, 0.0f, rotatePart[0], 1.0f);
+        partMatrix[1] = buildModelMatrix(1, translatePart[1], 0.0f, 1.0f);
+        partMatrix[2] = buildModelMatrix(2, 0.0f, 0.0f, scalePart[2]);
 
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-        glm::mat4 model = glm::mat4(1.0f);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -128,21 +168,20 @@ int main() {
         glUseProgram(shaderProgram);
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 
         glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
         glUniform3fv(glGetUniformLocation(shaderProgram, "viewPos"), 1, glm::value_ptr(cameraPos));
-
         glUniform3fv(glGetUniformLocation(shaderProgram, "light.ambient"), 1, glm::value_ptr(lightAmbient));
         glUniform3fv(glGetUniformLocation(shaderProgram, "light.diffuse"), 1, glm::value_ptr(lightDiffuse));
         glUniform3fv(glGetUniformLocation(shaderProgram, "light.specular"), 1, glm::value_ptr(lightSpecular));
-
         glUniform3fv(glGetUniformLocation(shaderProgram, "material.ambient"), 1, glm::value_ptr(materialAmbient));
         glUniform3fv(glGetUniformLocation(shaderProgram, "material.diffuse"), 1, glm::value_ptr(materialDiffuse));
         glUniform3fv(glGetUniformLocation(shaderProgram, "material.specular"), 1, glm::value_ptr(materialSpecular));
         glUniform1f(glGetUniformLocation(shaderProgram, "material.shininess"), shininess);
 
-        ourModel.Draw();
+        ourModel.DrawPart(0, shaderProgram, partMatrix[0]);
+        ourModel.DrawPart(1, shaderProgram, partMatrix[1]);
+        ourModel.DrawPart(2, shaderProgram, partMatrix[2]);
 
         glfwSwapBuffers(window);
         glfwPollEvents();

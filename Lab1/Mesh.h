@@ -15,7 +15,7 @@ public:
     unsigned int VAO;
 
     Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices);
-    void Draw();
+    void Draw(unsigned int shaderProgram, const glm::mat4& modelMatrix);
 
 private:
     unsigned int VBO, EBO;
