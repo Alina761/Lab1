@@ -77,31 +77,14 @@ unsigned int createShaderProgram(const char* vpath, const char* fpath) {
     return prog;
 }
 
-//МАТРИЦЫ И КООРДИНАТЫ
-glm::mat4 partMatrix[3];
-glm::vec3 partCenter[3] = {
-    glm::vec3(0.000000f, -0.486263f,  1.326860f), // куб
-    glm::vec3(-0.034030f, -0.568563f,  1.878100f), // куб001
-    glm::vec3(0.000000f,  0.536150f,  2.096110f)  // цилиндр
-};
+//КООРДИНАТЫ ЦЕНТРОВ
+glm::vec3 centerBase = glm::vec3(0.000000f, -0.486263f, 1.326860f);
+glm::vec3 centerArm = glm::vec3(0.2279f, 0.130384f, 0.51433f);
+glm::vec3 centerTube = glm::vec3(0.000000f, 0.536150f, 2.096110f);
 
-// Параметры для каждой части (пример)
-float translatePart[3] = { 0.0f, 0.0f, 0.0f };
-float rotatePart[3] = { 0.0f, 0.0f, 0.0f };
-float scalePart[3] = { 1.0f, 1.0f, 1.0f };
-
-glm::mat4 buildModelMatrix(int i, float trans, float rot, float scaleVal) {
-    glm::mat4 model = glm::mat4(1.0f);
-    // Перенос в центр
-    model = glm::translate(model, partCenter[i]);
-    // Преобразования
-    model = glm::translate(model, glm::vec3(0.0f, 0.0f, trans));
-    model = glm::rotate(model, glm::radians(rot), glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::scale(model, glm::vec3(scaleVal));
-    // Перенос обратно
-    model = glm::translate(model, -partCenter[i]);
-    return model;
-}
+float baseRotate = 0.0f;
+float armPitch = 0.0f;          
+float tubeShiftZ = 0.0f;        
 
 int main() {
     SetConsoleOutputCP(1251);
@@ -139,25 +122,45 @@ int main() {
         float speed = 2.5f * deltaTime;
         float angleSpeed = 50.0f * deltaTime;
 
-        // Управление камерой (стрелки)
+        // Камера
         if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) cameraPos += speed * cameraFront;
         if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) cameraPos -= speed * cameraFront;
         if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * speed;
         if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * speed;
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
 
-        // Управление частями
-        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) rotatePart[0] += angleSpeed;
-        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) rotatePart[0] -= angleSpeed;
-        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) translatePart[1] += speed;
-        if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS) translatePart[1] -= speed;
-        if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS) scalePart[2] += speed * 0.5f;
-        if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS) scalePart[2] -= speed * 0.5f;
+        // Управление кинематикой
+        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) baseRotate += angleSpeed;
+        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) baseRotate -= angleSpeed;
+        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) armPitch += angleSpeed;
+        if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS) armPitch -= angleSpeed;
+        if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS) tubeShiftZ += speed;
+        if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS) tubeShiftZ -= speed;
 
-        // Сборка матриц
-        partMatrix[0] = buildModelMatrix(0, 0.0f, rotatePart[0], 1.0f);
-        partMatrix[1] = buildModelMatrix(1, translatePart[1], 0.0f, 1.0f);
-        partMatrix[2] = buildModelMatrix(2, 0.0f, 0.0f, scalePart[2]);
+        // Ограничения, чтобы не отрывалось
+        if (armPitch > 30.0f) armPitch = 30.0f;
+        if (armPitch < -10.0f) armPitch = -10.0f;
+        if (tubeShiftZ < -0.5f) tubeShiftZ = -0.5f;
+        if (tubeShiftZ > 0.0f) tubeShiftZ = 0.0f;
+
+        // --- Кинематическая цепочка ---
+        // Основание
+        glm::mat4 baseMatrix = glm::mat4(1.0f);
+        baseMatrix = glm::translate(baseMatrix, centerBase);
+        baseMatrix = glm::rotate(baseMatrix, glm::radians(baseRotate), glm::vec3(0, 1, 0));
+        baseMatrix = glm::translate(baseMatrix, -centerBase);
+
+        // Вторая деталь
+        glm::mat4 armMatrix = baseMatrix;
+        armMatrix = glm::translate(armMatrix, centerArm);
+        armMatrix = glm::rotate(armMatrix, glm::radians(armPitch), glm::vec3(0, 1, 0));
+        armMatrix = glm::translate(armMatrix, -centerArm);
+
+        // Третья деталь
+        glm::mat4 tubeMatrix = armMatrix;
+        tubeMatrix = glm::translate(tubeMatrix, centerTube);
+        tubeMatrix = glm::translate(tubeMatrix, glm::vec3(0, 0, tubeShiftZ));
+        tubeMatrix = glm::translate(tubeMatrix, -centerTube);
 
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
@@ -179,9 +182,9 @@ int main() {
         glUniform3fv(glGetUniformLocation(shaderProgram, "material.specular"), 1, glm::value_ptr(materialSpecular));
         glUniform1f(glGetUniformLocation(shaderProgram, "material.shininess"), shininess);
 
-        ourModel.DrawPart(0, shaderProgram, partMatrix[0]);
-        ourModel.DrawPart(1, shaderProgram, partMatrix[1]);
-        ourModel.DrawPart(2, shaderProgram, partMatrix[2]);
+        ourModel.DrawPart(0, shaderProgram, baseMatrix);
+        ourModel.DrawPart(1, shaderProgram, armMatrix);
+        ourModel.DrawPart(2, shaderProgram, tubeMatrix);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
